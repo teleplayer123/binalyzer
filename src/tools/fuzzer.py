@@ -5,31 +5,27 @@ import binascii
 #if issues with afl++ starting, run the following:
 # echo core | sudo tee /proc/sys/kernel/core_pattern
 
-start_fuzzing_tool = {
-    "type": "function",
-    "function": {
-        "name": "start_afl_fuzz",
-        "description": "Starts an AFL++ fuzzing session on a target binary.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "binary_path": {"type": "string", "description": "Path to the target executable"},
-                "timeout": {"type": "string", "description": "Time to run in seconds (e.g., '60s')"}
-            },
-            "required": ["binary_path"]
-        }
-    }
-}
+# start_fuzzing_tool = {
+#     "type": "function",
+#     "function": {
+#         "name": "start_afl_fuzz",
+#         "description": "Starts an AFL++ fuzzing session on a target binary.",
+#         "parameters": {
+#             "type": "object",
+#             "properties": {
+#                 "binary_path": {"type": "string", "description": "Path to the target executable"},
+#                 "timeout": {"type": "string", "description": "Time to run in seconds (e.g., '60s')"}
+#             },
+#             "required": ["binary_path"]
+#         }
+#     }
+# }
 
-def run_afl_fuzz(binary_path, timeout="30s"):
-    """Runs AFL++ in QEMU mode (no need to recompile the target)."""
-    # -i: input seeds, -o: output crashes, -Q: QEMU mode for binaries without source
-    cmd = f"timeout {timeout} afl-fuzz -i /home/analyst/fuzz_in -o /home/analyst/fuzz_out -Q -- {binary_path}"
-    
+def run_afl_fuzz(cmd, outdir):
+    """Runs the AFL++ fuzzer with the given command and output directory."""
     try:
-        # We run this in the background or with a timeout
         process = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        return f"Fuzzing session finished. Check /home/analyst/fuzz_out/crashes for results."
+        return f"Fuzzing session finished. Check {outdir} for results."
     except Exception as e:
         return f"Fuzzing failed: {str(e)}"
 
@@ -51,7 +47,7 @@ def run_afl_fuzz(binary_path, timeout="30s"):
 # }
 
 # The actual Python implementation
-def generate_fuzz_seed(path, content_hex):
+def run_generate_fuzz_seed(path, content_hex):
     try:
         binary_data = binascii.unhexlify(content_hex)
         with open(path, "wb") as f:

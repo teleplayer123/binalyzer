@@ -8,6 +8,8 @@ import sqlite3
 import r2pipe
 from openai import OpenAI
 
+from tools.fuzzer import run_afl_fuzz, run_generate_fuzz_seed
+
 
 # --- CONFIGURATION ---
 #LLM_API_URL = "http://localhost:8001/v1"
@@ -147,19 +149,16 @@ class SecurityAgent:
         """Creates a binary seed for AFL++ based on LLM suggestions."""
         os.makedirs(SEED_DIR, exist_ok=True)
         path = os.path.join(SEED_DIR, os.path.basename(filename))
-
+        return run_generate_fuzz_seed(path, content_hex)
         
     def start_afl_fuzz(self, binary_name, timeout="60s"):
         """Starts AFL++ in QEMU mode."""
         target = os.path.join(TARGET_DIR, binary_name)
         # Ensure output dir exists
         os.makedirs(OUTPUT_DIR, exist_ok=True)
+        # -i: input seeds, -o: output crashes, -Q: QEMU mode for binaries without source
         cmd = f"timeout {timeout} afl-fuzz -i {SEED_DIR} -o {OUTPUT_DIR} -Q -- {target}"
-        try:
-            subprocess.run(cmd, shell=True, capture_output=True)
-            return f"Fuzzing complete. Results in {OUTPUT_DIR}"
-        except Exception as e:
-            return f"Fuzzing failed: {str(e)}"
+        return run_afl_fuzz(cmd, OUTPUT_DIR)
 
     def _timeout_handler(self, signum, frame):
         raise TimeoutError("Command timed out.")
