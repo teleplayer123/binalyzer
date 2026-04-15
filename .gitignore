@@ -3,3 +3,7 @@ test*
 re_assist.db
 __pycache__/
 .DS_Store
+agent_memory.db
+target
+fuzz_in
+fuzz_out

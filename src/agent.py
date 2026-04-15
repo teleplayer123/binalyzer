@@ -1,4 +1,3 @@
-import binascii
 import os
 import json
 import signal
@@ -22,6 +21,16 @@ TARGET_DIR = os.path.join(BASE_DIR, "target")
 SEED_DIR = os.path.join(BASE_DIR, "fuzz_in")
 OUTPUT_DIR = os.path.join(BASE_DIR, "fuzz_out")
 DB_PATH = os.path.join(BASE_DIR, "agent_memory.db")
+
+if not os.path.exists(TARGET_DIR):
+    os.mkdir(TARGET_DIR)
+
+if not os.path.exists(SEED_DIR):
+    os.mkdir(SEED_DIR)
+
+if not os.path.exists(OUTPUT_DIR):
+    os.mkdir(OUTPUT_DIR)
+
 
 client = OpenAI(base_url=LLM_API_URL, api_key="sk-no-key-required")
 
