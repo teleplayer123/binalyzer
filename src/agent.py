@@ -7,8 +7,8 @@ import sqlite3
 import r2pipe
 from openai import OpenAI
 
-from tools.fuzzer import run_afl_fuzz, run_generate_fuzz_seed
 from lib.chat_logger import ChatLogger
+from tools.pattern_generator import generate_pattern
 
 
 # --- CONFIGURATION ---
@@ -19,19 +19,11 @@ MAX_HISTORY_MESSAGES = 15 # Keep the most recent turns
 R2_TIMEOUT = 15
 BASE_DIR = "/home/analyst"
 TARGET_DIR = os.path.join(BASE_DIR, "target")
-SEED_DIR = os.path.join(BASE_DIR, "fuzz_in")
-OUTPUT_DIR = os.path.join(BASE_DIR, "fuzz_out")
 DB_DIR = os.path.join(BASE_DIR, "db")
 DB_PATH = os.path.join(DB_DIR, "agent_memory.db")
 
 if not os.path.exists(TARGET_DIR):
     os.mkdir(TARGET_DIR)
-
-if not os.path.exists(SEED_DIR):
-    os.mkdir(SEED_DIR)
-
-if not os.path.exists(OUTPUT_DIR):
-    os.mkdir(OUTPUT_DIR)
 
 if not os.path.exists(DB_DIR):
     os.mkdir(DB_DIR)
@@ -141,10 +133,8 @@ class SecurityAgent:
             result = self.run_r2(args.get("filename"), args.get("command"))
         elif name == "perform_security_audit":
             result = self.run_audit(args.get("filename"))
-        elif name == "generate_fuzz_seed":
-            result = self.generate_fuzz_seed(args.get("filename"), args.get("content_hex"))
-        elif name == "start_afl_fuzz":
-            result = self.start_afl_fuzz(args.get("binary_name"), args.get("timeout", "30s"))
+        elif name == "generate_fuzz_pattern":
+            result = generate_pattern(args.get("length"))
         elif name == "run_trace":
             result = self.run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
         elif name == "update_kg":
@@ -159,21 +149,6 @@ class SecurityAgent:
         if len(result) > MAX_TOOL_CHARS:
             return self.summarize_content(result)
         return result
-    
-    def generate_fuzz_seed(self, filename, content_hex):
-        """Creates a binary seed for AFL++ based on LLM suggestions."""
-        os.makedirs(SEED_DIR, exist_ok=True)
-        path = os.path.join(SEED_DIR, os.path.basename(filename))
-        return run_generate_fuzz_seed(path, content_hex)
-        
-    def start_afl_fuzz(self, binary_name, timeout="60s"):
-        """Starts AFL++ in QEMU mode."""
-        target = os.path.join(TARGET_DIR, binary_name)
-        # Ensure output dir exists
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        # -i: input seeds, -o: output crashes, -Q: QEMU mode for binaries without source
-        cmd = f"timeout {timeout} afl-fuzz -i {SEED_DIR} -o {OUTPUT_DIR} -Q -- {target}"
-        return run_afl_fuzz(cmd, OUTPUT_DIR)
 
     def _timeout_handler(self, signum, frame):
         raise TimeoutError("Command timed out.")
@@ -312,30 +287,14 @@ class SecurityAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "generate_fuzz_seed",
-                    "description": "Creates a binary seed file for fuzzing based on a hex string.",
+                    "name": "generate_fuzz_pattern",
+                    "description": "Creates a random fuzzing pattern string from specified length.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "filename": {"type": "string", "description": "Name of the seed file (e.g., 'seed_1.bin')"},
-                            "content_hex": {"type": "string", "description": "The hex representation of the binary data (e.g., '41414141')"}
+                           "length": {"type": "integer", "description": "Length of the fuzzing pattern to generate"}
                         },
-                        "required": ["filename", "content_hex"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "start_afl_fuzz",
-                    "description": "Run AFL++ fuzzer on the target.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "binary_path": {"type": "string", "description": "Path to the target executable"},
-                            "timeout": {"type": "string", "description": "Time to run in seconds (e.g., '60s')"}
-                        },
-                        "required": ["binary_path"]
+                        "required": ["length"]
                     }
                 }
             },

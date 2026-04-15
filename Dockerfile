@@ -20,8 +20,6 @@ RUN apt-get update && apt-get install -y \
     automake \
     bison \
     libglib2.0-dev \
-    # AFL++ specific package
-    afl++ \
     radare2 \
     nano \
     vim \
@@ -34,7 +32,6 @@ RUN pip3 install --no-cache-dir \
     lief \
     capstone \
     pyelftools \
-    networkx \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
@@ -43,8 +40,9 @@ WORKDIR /home/analyst
 
 COPY ./src /home/analyst
 
-# Setup directories for the fuzzer
-RUN mkdir -p /home/analyst/fuzz_in /home/analyst/fuzz_out /home/analyst/target_binaries
+# Setup directories
+RUN mkdir -p /home/analyst/target_binaries
+# Copy xz binary for testing
 RUN cp $(which xz) /home/analyst/target_binaries/xz.bin
 
 CMD ["bash"]

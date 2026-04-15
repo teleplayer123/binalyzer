@@ -1,5 +1,5 @@
 import lief
-from capstone import *
+import capstone as cs
 import subprocess
 import json
 
@@ -21,10 +21,9 @@ def disassemble_at_address(filepath, address, count=20):
     """Disassembles code at a specific memory address."""
     binary = lief.parse(filepath)
     # Simplified: finding the raw bytes at a virtual address
-    # In a real tool, you'd use a library like r2pipe for better mapping
     raw_code = binary.get_content_from_virtual_address(address, count * 4) 
     
-    md = Cs(CS_ARCH_X86, CS_MODE_64) # Adjust based on binary arch
+    md = cs.Cs(cs.CS_ARCH_X86, cs.CS_MODE_64) # Adjust based on binary arch
     assembly = []
     for i in md.disasm(bytes(raw_code), address):
         assembly.append(f"{hex(i.address)}: {i.mnemonic} {i.op_str}")
@@ -47,3 +46,72 @@ def triage_crash(binary_path, crash_input_path):
     except Exception as e:
         return f"Triage failed: {str(e)}"
 
+class BinDisasm:
+
+    def __init__(self, filename, arch="arm", mode="arm", size=None):
+        self.filename = filename
+        self._size = size
+        self._data_fd = None
+        self.data = None
+        self._code = None
+        self._dis = None
+
+        self._archs = {
+            "arm": cs.CS_ARCH_ARM,
+            "arm64": cs.CS_ARCH_ARM64,
+            "x86": cs.CS_ARCH_X86,
+            "mips": cs.CS_ARCH_MIPS
+        }
+        self._modes = {
+            "x86": cs.CS_MODE_32,
+            "x86_64": cs.CS_MODE_64,
+            "arm": cs.CS_MODE_ARM,
+            "mips32": cs.CS_MODE_MIPS32,
+            "mips64": cs.CS_MODE_MIPS64,
+            "thumb": cs.CS_MODE_THUMB
+        }
+        try:
+            self._arch = self._archs[arch]
+            self._mode = self._modes[mode]
+        except KeyError:
+            raise KeyError("arch or mode are not supported.")
+
+    def _get_code(self, offset=0):
+        self._dis = cs.Cs(self._arch, self._mode)
+        code = self._dis.disasm(self.data, offset=offset)
+        return [ins for ins in code]
+    
+    def reconfig_mode(self, mode):
+        if self._dis is not None:
+            self._dis.mode = mode
+        else:
+            raise EnvironmentError("File must be parsed before reconfiguring mode.")
+        
+    def set_syntax(self, syntax):
+        if self._dis is not None:
+            self._dis.syntax = syntax
+        else:
+            raise EnvironmentError("File must be parsed before setting syntax format.")
+
+    def parse_code(self, offset=0):
+        ins_info = {}
+        code = self._get_code(offset)
+        for i in code:
+            ins_by_addr = {
+                "address": i.address,
+                "mnemonic": i.mnemonic,
+                "operation": i.op_str
+            }
+            ins_info[str(i.address)] = ins_by_addr
+        return ins_info
+
+    def __enter__(self):
+        self._data_fd = open(self.filename, "rb")
+        if self._size is not None and type(self._size) == int:
+            self.data = self._data_fd.read(self._size)
+        else:
+            self.data = self._data_fd.read()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._data_fd.close()
