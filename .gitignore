@@ -7,3 +7,4 @@ agent_memory.db
 target
 fuzz_in
 fuzz_out
+db
