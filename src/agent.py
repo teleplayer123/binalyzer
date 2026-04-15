@@ -104,7 +104,7 @@ class SecurityAgent:
             print("[!] Pruning history to save context tokens.")
             self.history = [self.history[0]] + self.history[-(MAX_HISTORY_MESSAGES-1):]
 
-    def _run_trace(self, filename, tool="ltrace", args=""):
+    def run_trace(self, filename, tool="ltrace", args=""):
         """Hardware-lite dynamic analysis using ltrace or strace."""
         path = os.path.join(TARGET_DIR, os.path.basename(filename))
         # Ensure the binary is executable inside the container
@@ -131,7 +131,7 @@ class SecurityAgent:
         elif name == "start_afl_fuzz":
             result = self.start_afl_fuzz(args.get("binary_name"), args.get("timeout", "30s"))
         elif name == "run_trace":
-            result = self._run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
+            result = self.run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
         elif name == "update_kg":
             result = self.db.add_finding(args.get("binary"), args.get("s"), args.get("r"), args.get("o"))
         elif name == "query_kg":
