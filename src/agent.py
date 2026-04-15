@@ -4,8 +4,10 @@ import json
 import signal
 import subprocess
 import sys
+import sqlite3
 import r2pipe
 from openai import OpenAI
+
 
 # --- CONFIGURATION ---
 #LLM_API_URL = "http://localhost:8001/v1"
@@ -17,13 +19,58 @@ BASE_DIR = "/home/analyst"
 TARGET_DIR = os.path.join(BASE_DIR, "target")
 SEED_DIR = os.path.join(BASE_DIR, "fuzz_in")
 OUTPUT_DIR = os.path.join(BASE_DIR, "fuzz_out")
+DB_PATH = os.path.join(BASE_DIR, "agent_memory.db")
 
 client = OpenAI(base_url=LLM_API_URL, api_key="sk-no-key-required")
 
+class SQLiteMemory:
+    """Permanent storage for security findings."""
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self._setup_db()
+
+    def _setup_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS triplets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    binary_name TEXT,
+                    subject TEXT,
+                    relation TEXT,
+                    object TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+    def add_finding(self, bin_name, s, r, o):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO triplets (binary_name, subject, relation, object) VALUES (?, ?, ?, ?)",
+                (bin_name, s, r, o)
+            )
+        return f"Database Updated: {s} -> {r} -> {o}"
+
+    def query(self, bin_name, node):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT subject, relation, object FROM triplets WHERE binary_name = ? AND (subject = ? OR object = ?)",
+                (bin_name, node, node)
+            )
+            rows = cursor.fetchall()
+        if not rows: return f"No historical knowledge found for '{node}'."
+        return f"Historical Knowledge for {node}:\n" + "\n".join([f"{r[0]} {r[1]} {r[2]}" for r in rows])
+
 class SecurityAgent:
     def __init__(self):
+        self.db = SQLiteMemory(DB_PATH)
         self.history = [
-            {"role": "system", "content": "You are a Linux Security Expert. Efficiently audit binaries. If tool output is a [SUMMARY], trust the previous analysis."},
+            {"role": "system", "content": (
+                "You are an expert Linux Security Researcher. "
+                "1. Use 'perform_security_audit' first to map the binary. "
+                "2. Use 'run_trace' with ltrace/strace to watch real-time execution. "
+                "3. ALWAYS save critical findings to the DB via 'update_kg'. "
+                "4. Access history with 'query_kg'. Be concise and technical."
+            )},
             {"role": "user", "content": "Wait for further instructions."}
         ]
         response = client.chat.completions.create(
@@ -39,16 +86,14 @@ class SecurityAgent:
     def summarize_content(self, raw_text):
         """Internal call to the LLM to condense massive tool output."""
         print("[!] Tool output too large. Summarizing...", file=sys.stderr)
-        prompt = f"Summarize the following technical output. Keep all memory addresses, function names, and suspicious indicators: \n\n{raw_text[:8000]}"
-        
         try:
             response = client.chat.completions.create(
                 model="Qwen3",
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": f"Summarize this technical data, highlighting risks/addresses:\n{raw_text[:5000]}"}]
             )
             return f"[SUMMARY]: {response.choices[0].message.content}"
         except:
-            return f"[TRUNCATED DATA]: {raw_text[:1000]}... [Data too large to process]"
+            return f"[TRUNCATED DATA]: {raw_text[:1000]}"
 
     def prune_history(self):
         """Keep the conversation history within a manageable size."""
@@ -56,6 +101,20 @@ class SecurityAgent:
             # Preserve the system prompt (index 0) and the last N messages
             print("[!] Pruning history to save context tokens.")
             self.history = [self.history[0]] + self.history[-(MAX_HISTORY_MESSAGES-1):]
+
+    def _run_trace(self, filename, tool="ltrace", args=""):
+        """Hardware-lite dynamic analysis using ltrace or strace."""
+        path = os.path.join(TARGET_DIR, os.path.basename(filename))
+        # Ensure the binary is executable inside the container
+        os.chmod(path, 0o755)
+        
+        # Capture stderr because that's where traces usually print
+        cmd = f"timeout 10s {tool} {path} {args}"
+        try:
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            output = res.stderr if res.stderr else res.stdout
+            return output if output else "[No trace output generated]"
+        except Exception as e: return f"Trace Error: {e}"
 
     def execute_tool(self, name, args):
         """Executes tools and handles the 'Smart Memory' logic."""
@@ -69,7 +128,14 @@ class SecurityAgent:
             result = self.generate_fuzz_seed(args.get("filename"), args.get("content_hex"))
         elif name == "start_afl_fuzz":
             result = self.start_afl_fuzz(args.get("binary_name"), args.get("timeout", "30s"))
-
+        elif name == "run_trace":
+            result = self._run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
+        elif name == "update_kg":
+            result = self.db.add_finding(args.get("binary"), args.get("s"), args.get("r"), args.get("o"))
+        elif name == "query_kg":
+            result = self.db.query(args.get("binary"), args.get("node"))
+        else: 
+            result = "Unknown tool."
         # Smart Memory Logic: Volatility and Summarization
         self.last_raw_output = result # Store in volatile memory for exactly one turn
         
@@ -81,12 +147,7 @@ class SecurityAgent:
         """Creates a binary seed for AFL++ based on LLM suggestions."""
         os.makedirs(SEED_DIR, exist_ok=True)
         path = os.path.join(SEED_DIR, os.path.basename(filename))
-        try:
-            with open(path, "wb") as f:
-                f.write(binascii.unhexlify(content_hex))
-            return f"Seed created at {path}"
-        except Exception as e:
-            return f"Seed Error: {str(e)}"
+
         
     def start_afl_fuzz(self, binary_name, timeout="60s"):
         """Starts AFL++ in QEMU mode."""
@@ -141,7 +202,7 @@ class SecurityAgent:
                 "entropy": self._r2_exec(path, "iSj"),
                 "strings": [s["string"] for s in self._r2_exec(path, "izzj") if len(s["string"]) > 15][:20]
             }
-            risky = ["system", "exec", "socket", "connect", "ptrace"]
+            risky = ["system", "exec", "socket", "connect", "ptrace", "strcpy", "gets"]
             audit["flagged_apis"] = [i for i in audit["imports"] if any(s in i for s in risky)]
             return json.dumps(audit)
         except Exception as e: 
@@ -150,7 +211,7 @@ class SecurityAgent:
     def chat(self, user_input):
         # Handle a special keyword to access volatile memory
         if "show raw" in user_input.lower() and self.last_raw_output:
-            user_input += f"\n\nContext from previous tool: {self.last_raw_output}"
+            user_input += f"\n\n[RAW CONTEXT]: {self.last_raw_output}"
 
         self.history.append({"role": "user", "content": user_input})
         
@@ -190,7 +251,25 @@ class SecurityAgent:
                     "description": "Analyze binary protections, strings, and suspicious API imports.",
                     "parameters": {
                         "type": "object",
-                        "properties": {"filename": {"type": "string"}},
+                        "properties": {
+                            "filename": {"type": "string"}
+                        },
+                        "required": ["filename"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "run_trace",
+                    "description": "Run binary with strace or ltrace to observe behavior.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "filename": {"type": "string"},
+                            "tool": {"type": "string", "enum": ["ltrace", "strace"]},
+                            "args": {"type": "string"}
+                        },
                         "required": ["filename"]
                     }
                 }
@@ -214,12 +293,12 @@ class SecurityAgent:
                 "type": "function",
                 "function": {
                     "name": "generate_fuzz_seed",
-                    "description": "Create a binary seed file from hex for fuzzing.",
+                    "description": "Creates a binary seed file for fuzzing based on a hex string.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "filename": {"type": "string"},
-                            "content_hex": {"type": "string"}
+                            "filename": {"type": "string", "description": "Name of the seed file (e.g., 'seed_1.bin')"},
+                            "content_hex": {"type": "string", "description": "The hex representation of the binary data (e.g., '41414141')"}
                         },
                         "required": ["filename", "content_hex"]
                     }
@@ -232,8 +311,43 @@ class SecurityAgent:
                     "description": "Run AFL++ fuzzer on the target.",
                     "parameters": {
                         "type": "object",
-                        "properties": {"binary_name": {"type": "string"}, "timeout": {"type": "string"}},
-                        "required": ["binary_name"]
+                        "properties": {
+                            "binary_path": {"type": "string", "description": "Path to the target executable"},
+                            "timeout": {"type": "string", "description": "Time to run in seconds (e.g., '60s')"}
+                        },
+                        "required": ["binary_path"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_kg",
+                    "description": "Save finding to persistent SQLite DB.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "binary": {"type": "string"},
+                            "s": {"type": "string", "description": "Subject"},
+                            "r": {"type": "string", "description": "Relation"},
+                            "o": {"type": "string", "description": "Object"}
+                        },
+                        "required": ["binary", "s", "r", "o"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_kg",
+                    "description": "Recall data from persistent SQLite DB.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "binary": {"type": "string"},
+                            "node": {"type": "string"}
+                        },
+                        "required": ["binary", "node"]
                     }
                 }
             }

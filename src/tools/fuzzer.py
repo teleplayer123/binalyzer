@@ -21,7 +21,7 @@ start_fuzzing_tool = {
     }
 }
 
-def start_afl_fuzz(binary_path, timeout="30s"):
+def run_afl_fuzz(binary_path, timeout="30s"):
     """Runs AFL++ in QEMU mode (no need to recompile the target)."""
     # -i: input seeds, -o: output crashes, -Q: QEMU mode for binaries without source
     cmd = f"timeout {timeout} afl-fuzz -i /home/analyst/fuzz_in -o /home/analyst/fuzz_out -Q -- {binary_path}"
@@ -34,34 +34,28 @@ def start_afl_fuzz(binary_path, timeout="30s"):
         return f"Fuzzing failed: {str(e)}"
 
 # The tool definition for the LLM
-fuzz_seed_tool = {
-    "type": "function",
-    "function": {
-        "name": "generate_fuzz_seed",
-        "description": "Creates a binary seed file for fuzzing based on a hex string.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "filename": {"type": "string", "description": "Name of the seed file (e.g., 'seed_1.bin')"},
-                "content_hex": {"type": "string", "description": "The hex representation of the binary data (e.g., '41414141')"}
-            },
-            "required": ["filename", "content_hex"]
-        }
-    }
-}
+# fuzz_seed_tool = {
+#     "type": "function",
+#     "function": {
+#         "name": "generate_fuzz_seed",
+#         "description": "Creates a binary seed file for fuzzing based on a hex string.",
+#         "parameters": {
+#             "type": "object",
+#             "properties": {
+#                 "filename": {"type": "string", "description": "Name of the seed file (e.g., 'seed_1.bin')"},
+#                 "content_hex": {"type": "string", "description": "The hex representation of the binary data (e.g., '41414141')"}
+#             },
+#             "required": ["filename", "content_hex"]
+#         }
+#     }
+# }
 
 # The actual Python implementation
-def generate_fuzz_seed(filename, content_hex):
-    # Ensure we only write to the designated seeds directory
-    base_dir = "/workspace/fuzz_seeds"
-    os.makedirs(base_dir, exist_ok=True)
-    
-    filepath = os.path.join(base_dir, os.path.basename(filename))
-    
+def generate_fuzz_seed(path, content_hex):
     try:
         binary_data = binascii.unhexlify(content_hex)
-        with open(filepath, "wb") as f:
+        with open(path, "wb") as f:
             f.write(binary_data)
-        return f"Successfully created seed at {filepath}"
+        return f"Successfully created seed at {path}"
     except Exception as e:
         return f"Error: {str(e)}"
