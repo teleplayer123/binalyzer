@@ -8,6 +8,7 @@ import r2pipe
 from openai import OpenAI
 
 from tools.fuzzer import run_afl_fuzz, run_generate_fuzz_seed
+from lib.chat_logger import ChatLogger
 
 
 # --- CONFIGURATION ---
@@ -36,6 +37,7 @@ if not os.path.exists(DB_DIR):
     os.mkdir(DB_DIR)
 
 client = OpenAI(base_url=LLM_API_URL, api_key="sk-no-key-required")
+logger = ChatLogger()
 
 class SQLiteMemory:
     """Permanent storage for security findings."""
@@ -99,7 +101,7 @@ class SecurityAgent:
 
     def summarize_content(self, raw_text):
         """Internal call to the LLM to condense massive tool output."""
-        print("[!] Tool output too large. Summarizing...", file=sys.stderr)
+        print("[*] Summarizing data...", file=sys.stderr)
         try:
             response = client.chat.completions.create(
                 model="Qwen3",
@@ -107,6 +109,7 @@ class SecurityAgent:
             )
             return f"[SUMMARY]: {response.choices[0].message.content}"
         except:
+            print("[!] Output too large. Truncating...", file=sys.stderr)
             return f"[TRUNCATED DATA]: {raw_text[:1000]}"
 
     def prune_history(self):
@@ -225,6 +228,8 @@ class SecurityAgent:
             user_input += f"\n\n[RAW CONTEXT]: {self.last_raw_output}"
 
         self.history.append({"role": "user", "content": user_input})
+
+        logger.log_message("user", user_input)
         
         while True:
             response = client.chat.completions.create(
@@ -237,6 +242,8 @@ class SecurityAgent:
             msg = response.choices[0].message
             self.history.append(msg)
 
+            logger.log_message(msg.role, msg.content)
+
             if not msg.tool_calls:
                 self.prune_history() # Clean up before next turn
                 return msg.content
@@ -245,6 +252,8 @@ class SecurityAgent:
                 print(f"[*] Tool Call: {tool_call.function.name}", file=sys.stderr)
                 print(f"[*] Executing Args: {tool_call.function.arguments}", file=sys.stderr)
                 result = self.execute_tool(tool_call.function.name, json.loads(tool_call.function.arguments))
+
+                logger.log_tool_output(tool_call.function.name, tool_call.function.arguments, result)
                 
                 self.history.append({
                     "tool_call_id": tool_call.id,
