@@ -1,5 +1,5 @@
 # Description
 
-Ollama based chat bot to aid in reverse engineering endeavours. Work in progress.
+LLM tool agent to help analyze binary files.
 
-*for ethical and legal use only
+*for ethical use
