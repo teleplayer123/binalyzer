@@ -23,6 +23,10 @@ RUN apt-get update && apt-get install -y \
     radare2 \
     nano \
     vim \
+    nasm \
+    gcc \
+    cmake \
+    make \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
