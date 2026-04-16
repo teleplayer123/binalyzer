@@ -5,8 +5,7 @@ __pycache__/
 .DS_Store
 agent_memory.db
 target
-fuzz_in
-fuzz_out
+logs
 db
 *.log
 .bash_history
