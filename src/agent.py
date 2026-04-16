@@ -123,7 +123,8 @@ class SecurityAgent:
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             output = res.stderr if res.stderr else res.stdout
             return output if output else "[No trace output generated]"
-        except Exception as e: return f"Trace Error: {e}"
+        except Exception as e: 
+            return f"Trace Error: {e}"
 
     def execute_tool(self, name, args):
         """Executes tools and handles the 'Smart Memory' logic."""
@@ -170,7 +171,7 @@ class SecurityAgent:
         signal.signal(signal.SIGALRM, self._timeout_handler)
         signal.alarm(R2_TIMEOUT)
         try:
-            r2 = r2pipe.open(path)
+            r2 = r2pipe.open(path, flags=["-e bin.cache=true"])
             output = r2.cmd(cmd)
             r2.quit()
             signal.alarm(0)
@@ -183,6 +184,7 @@ class SecurityAgent:
         """Bundled tool for rapid security assessment."""
         path = os.path.join(TARGET_DIR, os.path.basename(filename))
         try:
+            self._r2_exec(path, "aaa")
             audit = {
                 "entry_point": self._r2_exec(path, "iej"),
                 "address_information": self._r2_exec(path, "aflj"),

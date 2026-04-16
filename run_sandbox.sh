@@ -9,6 +9,5 @@
 podman run -it \
     -u root \
     --network="host" \
-    --cap-add=SYS_PTRACE \
-    -v $(pwd)/src:/home/analyst \
     linux-security-agent
+    #-v ./src:/home/analyst

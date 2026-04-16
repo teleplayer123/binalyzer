@@ -41,8 +41,8 @@ WORKDIR /home/analyst
 COPY ./src /home/analyst
 
 # Setup directories
-RUN mkdir -p /home/analyst/target_binaries
+RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs
 # Copy xz binary for testing
-RUN cp $(which xz) /home/analyst/target_binaries/xz.bin
+RUN cp $(which xz) /home/analyst/target/xz.bin
 
 CMD ["bash"]

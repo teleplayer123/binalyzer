@@ -3,10 +3,14 @@ import os
 import time
 
 BASE_DIR = "/home/analyst"
+LOG_DIR = os.path.join(BASE_DIR, "logs")
 
 class ChatLogger:
     def __init__(self, name="chat_history"):
-        logging.basicConfig(filename=os.path.join(BASE_DIR, f"{name}_{int(time.time())}.log"), level=logging.INFO, format='%(asctime)s - %(message)s')
+        if not os.path.exists(LOG_DIR):
+            os.mkdir(LOG_DIR)
+
+        logging.basicConfig(filename=os.path.join(LOG_DIR, f"{name}_{int(time.time())}.log"), level=logging.INFO, format='%(asctime)s - %(message)s')
         self.logger = logging.getLogger(__name__)
     
     def log_message(self, role, content):

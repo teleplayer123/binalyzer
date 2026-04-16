@@ -9,3 +9,4 @@ fuzz_in
 fuzz_out
 db
 *.log
+.bash_history
