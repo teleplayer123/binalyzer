@@ -5,8 +5,8 @@ import time
 BASE_DIR = "/home/analyst"
 
 class ChatLogger:
-    def __init__(self, log_file="chat_history.log"):
-        logging.basicConfig(filename=os.path.join(BASE_DIR, f"{log_file}_{int(time.time())}"), level=logging.INFO, format='%(asctime)s - %(message)s')
+    def __init__(self, name="chat_history"):
+        logging.basicConfig(filename=os.path.join(BASE_DIR, f"{name}_{int(time.time())}.log"), level=logging.INFO, format='%(asctime)s - %(message)s')
         self.logger = logging.getLogger(__name__)
     
     def log_message(self, role, content):
