@@ -8,6 +8,6 @@
 # Run the container
 podman run -it \
     --network="host" \
-    -v ./src:/home/analyst \
     linux-security-agent
+    #-v ./src:/home/analyst
     #-u root
