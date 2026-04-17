@@ -34,6 +34,7 @@ RUN pip3 install --no-cache-dir \
     lief \
     capstone \
     pyelftools \
+    titoken \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
