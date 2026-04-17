@@ -1,3 +1,5 @@
+from collections import deque
+import difflib
 import os
 import json
 import signal
@@ -5,6 +7,7 @@ import subprocess
 import sys
 import sqlite3
 import r2pipe
+import tiktoken
 from openai import OpenAI
 
 from lib.chat_logger import ChatLogger
@@ -16,6 +19,7 @@ from tools.pattern_generator import generate_pattern
 LLM_API_URL = "http://host.containers.internal:8001/v1"
 MAX_TOOL_CHARS = 2000  # Summarize if output exceeds this
 MAX_HISTORY_MESSAGES = 15 # Keep the most recent turns
+MAX_CONTEXT_TOKENS = 12000  # Safe ceiling
 R2_TIMEOUT = 15
 BASE_DIR = "/home/analyst"
 TARGET_DIR = os.path.join(BASE_DIR, "target")
@@ -67,10 +71,72 @@ class SQLiteMemory:
             rows = cursor.fetchall()
         if not rows: return f"No historical knowledge found for '{node}'."
         return f"Historical Knowledge for {node}:\n" + "\n".join([f"{r[0]} {r[1]} {r[2]}" for r in rows])
+    
+class SecurityContextManager:
+    def __init__(self, max_tokens):
+        self.encoder = tiktoken.get_encoding("cl100k_base")
+        self.max_tokens = max_tokens
+        self.history = deque()
+        self.system_prompt = {
+            "role": "system",
+            "content": (
+                "You are an expert Linux Security Researcher. "
+                "Context is managed via Diffs and Summaries to save VRAM. "
+                "Always save findings to the DB via 'update_kg'."
+            )
+        }
+
+    def _denoise(self, text):
+        """Removes common syscall noise to save tokens."""
+        noise_filters = ["gettimeofday", "brk", "mmap", "ARCH_SET_FS", "set_tid_address"]
+        lines = text.splitlines()
+        filtered = [l for l in lines if not any(f in l for f in noise_filters)]
+        return "\n".join(filtered[:60]) # Cap at 60 lines
+
+    def _get_diff(self, key, current_output):
+        """Only sends the delta if a command is repeated."""
+        if key in self.r2_cache:
+            old = self.r2_cache[key]
+            if old == current_output: return "[Output Unchanged]"
+            diff = difflib.unified_diff(old.splitlines(), current_output.splitlines(), n=1)
+            self.r2_cache[key] = current_output
+            return "DIFF FROM PREVIOUS:\n" + "\n".join(list(diff)[:20])
+        
+        self.r2_cache[key] = current_output
+        return current_output
+
+    def _count(self, content):
+        if not content: return 0
+        return len(self.encoder.encode(str(content))) + 4
+
+    def add(self, role, content=None, tool_calls=None, tool_call_id=None, name=None):
+        msg = {"role": role}
+        if content: msg["content"] = content
+        if tool_calls: msg["tool_calls"] = tool_calls
+        if tool_call_id: 
+            msg["tool_call_id"] = tool_call_id
+            msg["name"] = name
+            
+        tokens = self._count(msg)
+        self.history.append({"msg": msg, "tokens": tokens})
+        self._prune()
+
+    def _prune(self):
+        total = sum(m["tokens"] for m in self.history) + self._count(self.system_prompt)
+        # Keep system prompt + the last 3 messages always
+        while total > self.max_tokens and len(self.history) > 3:
+            removed = self.history.popleft()
+            total -= removed["tokens"]
+
+    def get_messages(self):
+        return [self.system_prompt] + [m["msg"] for m in self.history]
+
 
 class SecurityAgent:
     def __init__(self):
         self.db = SQLiteMemory(DB_PATH)
+        self.ctx = SecurityContextManager(MAX_CONTEXT_TOKENS)
+        self.r2_cache = {} # For Diffing
         self.history = [
             {"role": "system", "content": (
                 "You are an expert Linux Security Researcher. "
@@ -204,40 +270,49 @@ class SecurityAgent:
         if "show raw" in user_input.lower() and self.last_raw_output:
             user_input += f"\n\n[RAW CONTEXT]: {self.last_raw_output}"
 
-        self.history.append({"role": "user", "content": user_input})
+        self.ctx.add("user", user_input)
+        #self.history.append({"role": "user", "content": user_input})
 
         logger.log_message("user", user_input)
         
         while True:
             response = client.chat.completions.create(
                 model="Qwen3",
-                messages=self.history,
+                messages=self.ctx.get_messages(), #self.history,
                 tools=self.get_tool_schemas(),
                 tool_choice="auto"
             )
 
             msg = response.choices[0].message
-            self.history.append(msg)
+            self.ctx.add("assistant", content=msg.content, tool_calls=msg.tool_calls)
+            #self.history.append(msg)
 
             logger.log_message(msg.role, msg.content)
 
             if not msg.tool_calls:
-                self.prune_history() # Clean up before next turn
+                #self.prune_history() # Clean up before next turn
                 return msg.content
-
+            
             for tool_call in msg.tool_calls:
                 print(f"[*] Tool Call: {tool_call.function.name}", file=sys.stderr)
                 print(f"[*] Executing Args: {tool_call.function.arguments}", file=sys.stderr)
                 result = self.execute_tool(tool_call.function.name, json.loads(tool_call.function.arguments))
-
                 logger.log_tool_output(tool_call.function.name, tool_call.function.arguments, result)
+                self.ctx.add("tool", content=result, tool_call_id=tool_call.id, name=tool_call.function.name)
+
+            # for tool_call in msg.tool_calls:
+            #     print(f"[*] Tool Call: {tool_call.function.name}", file=sys.stderr)
+            #     print(f"[*] Executing Args: {tool_call.function.arguments}", file=sys.stderr)
+            #     result = self.execute_tool(tool_call.function.name, json.loads(tool_call.function.arguments))
+
+            #     logger.log_tool_output(tool_call.function.name, tool_call.function.arguments, result)
                 
-                self.history.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": tool_call.function.name,
-                    "content": result
-                })
+            #     self.history.append({
+            #         "tool_call_id": tool_call.id,
+            #         "role": "tool",
+            #         "name": tool_call.function.name,
+            #         "content": result
+            #     })
 
     def get_tool_schemas(self):
         return [
