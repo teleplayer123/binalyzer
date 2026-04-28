@@ -52,7 +52,7 @@ RUN mkdir -p /home/analyst/tiktoken_cache
 RUN wget -P /home/analyst/tiktoken_cache "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
 # expected hash: 223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7
 # Create env variable to point to tiktoken
-RUN export TIKTOKEN_CACHE_DIR=/home/analyst/tiktoken_cache
+RUN echo export TIKTOKEN_CACHE_DIR=/home/analyst/tiktoken_cache >> /home/analyst/.bashrc
 
 
 # Setup directories
