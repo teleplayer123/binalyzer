@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     nasm \
     gcc \
-    afl++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install specialized analysis libraries
@@ -43,6 +42,8 @@ USER analyst
 WORKDIR /home/analyst
 
 COPY ./src /home/analyst
+
+RUN git clone --recursive https://github.com/AFLplusplus/AFLplusplus.git ~/afl && ~/afl/qemu_mode/build_qemu_support.sh
 
 # Setup directories
 RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs
