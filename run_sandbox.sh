@@ -10,4 +10,4 @@ podman run -it \
     --network="host" \
     linux-security-agent
     #-v ./src:/home/analyst
-    #-u root \
+    #-u root
