@@ -9,5 +9,5 @@
 podman run -it \
     --network="host" \
     linux-security-agent
-    #-u root \
     #-v ./src:/home/analyst
+    #-u root \
