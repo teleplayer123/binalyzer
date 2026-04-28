@@ -10,3 +10,4 @@ db
 *.log
 .bash_history
 opencode.json
+.claude
