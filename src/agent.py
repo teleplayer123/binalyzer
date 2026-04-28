@@ -32,6 +32,8 @@ if not os.path.exists(TARGET_DIR):
 if not os.path.exists(DB_DIR):
     os.mkdir(DB_DIR)
 
+os.environ["OPENAI_API_KEY"] = "sk-dummy-key"
+
 client = OpenAI(base_url=LLM_API_URL, api_key="sk-no-key-required")
 logger = ChatLogger()
 
