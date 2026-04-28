@@ -327,20 +327,6 @@ class SecurityAgent:
                 logger.log_tool_output(tool_call.function.name, tool_call.function.arguments, result)
                 self.ctx.add("tool", content=result, tool_call_id=tool_call.id, name=tool_call.function.name)
 
-            # for tool_call in msg.tool_calls:
-            #     print(f"[*] Tool Call: {tool_call.function.name}", file=sys.stderr)
-            #     print(f"[*] Executing Args: {tool_call.function.arguments}", file=sys.stderr)
-            #     result = self.execute_tool(tool_call.function.name, json.loads(tool_call.function.arguments))
-
-            #     logger.log_tool_output(tool_call.function.name, tool_call.function.arguments, result)
-                
-            #     self.history.append({
-            #         "tool_call_id": tool_call.id,
-            #         "role": "tool",
-            #         "name": tool_call.function.name,
-            #         "content": result
-            #     })
-
     def get_tool_schemas(self):
         return [
             {
