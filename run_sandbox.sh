@@ -1,5 +1,5 @@
 # start podman
-# podman machine init
+# podman machine init # (only needs to be run once)
 # podman machine start
 
 # Build the image
