@@ -1,7 +1,7 @@
 #!/bin/bash
 
 llama-server \
-    --model qwen3.5-9B-Q3_K_M.gguf \
+    --model qwen3.5-9B-Q5_K_M.gguf \
     --alias "Qwen3" \
     --temp 0.6 \
     --top-p 0.95 \
