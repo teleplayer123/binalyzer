@@ -26,7 +26,6 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     nasm \
     gcc \
-    python3-tiktoken \
     afl++ \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,6 +35,9 @@ RUN pip3 install --no-cache-dir \
     lief \
     capstone \
     pyelftools \
+    tiktoken \
+    numpy \
+    scipy \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
@@ -47,6 +49,6 @@ COPY ./src /home/analyst
 # Setup directories
 RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs
 # Copy xz binary for testing
-RUN cp $(which xz) /home/analyst/target/
+RUN cp $(which xz) /home/analyst/target/xz.bin
 
 CMD ["bash"]
