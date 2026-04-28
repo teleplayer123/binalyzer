@@ -23,6 +23,9 @@ MAX_CONTEXT_TOKENS = 12000  # Safe ceiling
 R2_TIMEOUT = 15
 BASE_DIR = "/home/analyst"
 TARGET_DIR = os.path.join(BASE_DIR, "target")
+SEED_DIR = os.path.join(BASE_DIR, "fuzz_in")
+SEED_FILE = os.path.join(SEED_DIR, "seed.txt")
+OUTPUT_DIR = os.path.join(BASE_DIR, "fuzz_out")
 DB_DIR = os.path.join(BASE_DIR, "db")
 DB_PATH = os.path.join(DB_DIR, "agent_memory.db")
 
@@ -200,8 +203,8 @@ class SecurityAgent:
             result = self.run_r2(args.get("filename"), args.get("command"))
         elif name == "perform_security_audit":
             result = self.run_audit(args.get("filename"))
-        elif name == "generate_fuzz_pattern":
-            result = generate_pattern(args.get("length"))
+        elif name == "generate_fuzz_seed":
+            result = self.generate_fuzz_seed(args.get("length"), args.get("filename"))
         elif name == "run_trace":
             result = self.run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
         elif name == "update_kg":
@@ -264,6 +267,30 @@ class SecurityAgent:
             return json.dumps(audit)
         except Exception as e: 
             return f"Audit Error: {e}"
+        
+    def generate_fuzz_seed(self, length, filename):
+        """Creates a binary seed for AFL++"""
+        os.makedirs(SEED_DIR, exist_ok=True)
+        path = os.path.join(SEED_DIR, os.path.basename(filename))
+        content = generate_pattern(length)
+        try:
+            with open(path, "w") as f:
+                f.write(content)
+            return f"Seed created at {path}"
+        except Exception as e:
+            return f"Seed Error: {str(e)}"
+        
+    def start_afl_fuzz(self, binary_name, timeout="60s"):
+        """Starts AFL++ in QEMU mode."""
+        target = os.path.join(TARGET_DIR, binary_name)
+        # Ensure output dir exists
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        cmd = f"timeout {timeout} afl-fuzz -i {SEED_DIR} -o {OUTPUT_DIR} -Q -- {target}"
+        try:
+            subprocess.run(cmd, shell=True, capture_output=True)
+            return f"Fuzzing complete. Results in {OUTPUT_DIR}"
+        except Exception as e:
+            return f"Fuzzing failed: {str(e)}"
 
     def chat(self, user_input):
         # Handle a special keyword to access volatile memory
@@ -364,12 +391,13 @@ class SecurityAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "generate_fuzz_pattern",
-                    "description": "Creates a random fuzzing pattern string from specified length.",
+                    "name": "generate_fuzz_seed",
+                    "description": "Creates a random fuzzing pattern string from specified length and writes to a file.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                           "length": {"type": "integer", "description": "Length of the fuzzing pattern to generate"}
+                           "length": {"type": "integer", "description": "Length of the fuzzing pattern to generate."},
+                           "filename": {"type": "string", "description": "Name of the file that the generated pattern is written to."}
                         },
                         "required": ["length"]
                     }

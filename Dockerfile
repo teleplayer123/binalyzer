@@ -50,8 +50,10 @@ COPY ./src /home/analyst
 # Cache tiktoken for offline use
 RUN python3 -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
+RUN echo export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 >> /home/analyst/.bashrc
+
 # Setup directories
-RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs
+RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs /home/analyst/fuzz_in /home/analyst/fuzz_out
 # Copy xz binary for testing
 RUN cp $(which xz) /home/analyst/target/xz.bin
 
