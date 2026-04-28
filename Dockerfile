@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     nasm \
     gcc \
+    python3-tiktoken \
     && rm -rf /var/lib/apt/lists/*
 
 # Install specialized analysis libraries
@@ -34,7 +35,6 @@ RUN pip3 install --no-cache-dir \
     lief \
     capstone \
     pyelftools \
-    titoken \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
@@ -43,7 +43,7 @@ WORKDIR /home/analyst
 
 COPY ./src /home/analyst
 
-RUN git clone --recursive https://github.com/AFLplusplus/AFLplusplus.git ~/afl && ~/afl/qemu_mode/build_qemu_support.sh
+RUN git clone https://github.com/AFLplusplus/AFLplusplus.git ~/afl && ~/afl/qemu_mode/build_qemu_support.sh
 
 # Setup directories
 RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs
