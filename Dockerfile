@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     nasm \
     gcc \
+    afl++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Install specialized analysis libraries
