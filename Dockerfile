@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     nasm \
     gcc \
     afl++ \
+    python3-tiktoken \
     && rm -rf /var/lib/apt/lists/*
 
 # Install specialized analysis libraries
@@ -35,7 +36,6 @@ RUN pip3 install --no-cache-dir \
     lief \
     capstone \
     pyelftools \
-    tiktoken \
     numpy \
     scipy \
     r2pipe --break-system-packages
