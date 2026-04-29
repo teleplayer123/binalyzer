@@ -443,5 +443,7 @@ if __name__ == "__main__":
     print("--- Security Agent ---", file=sys.stderr)
     while True:
         query = input("\n[User]: ")
+        if len(query) == 0:
+            continue
         if query.lower() in ['exit', 'quit']: break
         print(f"\n[Agent]: {agent.chat(query)}", file=sys.stderr)
