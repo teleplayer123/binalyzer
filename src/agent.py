@@ -262,7 +262,7 @@ class SecurityAgent:
                 "mitigations": self._r2_exec(path, "iIj"),
                 "imports": self._r2_exec(path, "iij"),
                 "entropy": self._r2_exec(path, "iSj"),
-                "strings": [s["string"] for s in self._r2_exec(path, "izzj") if len(s["string"]) > 15][:20]
+                "strings": [s["string"] for s in self._r2_exec(path, "izj") if len(s["string"]) > 7][:20]
             }
             risky = ["system", "exec", "socket", "connect", "ptrace", "strcpy", "gets"]
             audit["flagged_apis"] = [i for i in audit["imports"] if any(s in i for s in risky)]
