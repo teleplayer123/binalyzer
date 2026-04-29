@@ -1,0 +1,1 @@
+podman build -t linux-security-agent .
