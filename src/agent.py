@@ -300,7 +300,7 @@ class SecurityAgent:
             user_input += f"\n\n[RAW CONTEXT]: {self.last_raw_output}"
 
         self.ctx.add("user", user_input)
-        #self.history.append({"role": "user", "content": user_input})
+        self.history.append({"role": "user", "content": user_input})
 
         logger.log_message("user", user_input)
         
@@ -314,12 +314,12 @@ class SecurityAgent:
 
             msg = response.choices[0].message
             self.ctx.add("assistant", content=msg.content, tool_calls=msg.tool_calls)
-            #self.history.append(msg)
+            self.history.append(msg)
 
             logger.log_message(msg.role, msg.content)
 
             if not msg.tool_calls:
-                #self.prune_history() # Clean up before next turn
+                self.prune_history() # Clean up before next turn
                 return msg.content
             
             for tool_call in msg.tool_calls:
