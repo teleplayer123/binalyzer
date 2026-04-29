@@ -206,7 +206,7 @@ class SecurityAgent:
         elif name == "generate_fuzz_seed":
             result = self.generate_fuzz_seed(args.get("length"), args.get("filename"))
         elif name == "start_afl_fuzz":
-            result = self.start_afl_fuzz(args.get("filename"), args.get("timeout", "60s"))
+            result = self.start_afl_fuzz(args.get("filename"), timeout=args.get("timeout", "60s"))
         elif name == "run_trace":
             result = self.run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
         elif name == "update_kg":
