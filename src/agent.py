@@ -205,6 +205,8 @@ class SecurityAgent:
             result = self.run_audit(args.get("filename"))
         elif name == "generate_fuzz_seed":
             result = self.generate_fuzz_seed(args.get("length"), args.get("filename"))
+        elif name == "start_afl_fuzz":
+            result = self.start_afl_fuzz(args.get("filename"), args.get("timeout", "60s"))
         elif name == "run_trace":
             result = self.run_trace(args.get("filename"), args.get("tool", "ltrace"), args.get("args", ""))
         elif name == "update_kg":
@@ -280,9 +282,9 @@ class SecurityAgent:
         except Exception as e:
             return f"Seed Error: {str(e)}"
         
-    def start_afl_fuzz(self, binary_name, timeout="60s"):
+    def start_afl_fuzz(self, filename, timeout="60s"):
         """Starts AFL++ in QEMU mode."""
-        target = os.path.join(TARGET_DIR, binary_name)
+        target = os.path.join(TARGET_DIR, filename)
         # Ensure output dir exists
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         cmd = f"timeout {timeout} afl-fuzz -i {SEED_DIR} -o {OUTPUT_DIR} -Q -- {target}"
@@ -386,6 +388,18 @@ class SecurityAgent:
                            "filename": {"type": "string", "description": "Name of the file that the generated pattern is written to."}
                         },
                         "required": ["length"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "start_afl_fuzz",
+                    "description": "Run AFL++ fuzzer on the target.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"filename": {"type": "string"}, "timeout": {"type": "string"}},
+                        "required": ["filename"]
                     }
                 }
             },
