@@ -1,5 +1,4 @@
 from collections import deque
-import difflib
 import os
 import json
 import signal
