@@ -1,5 +1,4 @@
 /venv
-test*
 re_assist.db
 __pycache__/
 .DS_Store
