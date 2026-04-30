@@ -12,3 +12,6 @@ db
 opencode.json
 notes.txt
 TODO.md
+fuzz_in
+fuzz_out
+fuzzing_plan.md
