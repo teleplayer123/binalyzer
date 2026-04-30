@@ -281,6 +281,7 @@ class SecurityAgent:
                 return msg.content
             
             for tool_call in msg.tool_calls:
+                logger.log_info(f"Tool Call: {tool_call}")
                 print(f"[*] Tool Call: {tool_call.function.name}", file=sys.stderr)
                 print(f"[*] Executing Args: {tool_call.function.arguments}", file=sys.stderr)
                 result = self.execute_tool(tool_call.function.name, json.loads(tool_call.function.arguments))
