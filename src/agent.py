@@ -80,33 +80,16 @@ class SecurityContextManager:
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.max_tokens = max_tokens
         self.history = deque()
-        self.system_prompt = {
-            "role": "system",
-            "content": (
+        self.system_prompt = [
+            {"role": "system", "content": (
                 "You are an expert Linux Security Researcher. "
-                "Context is managed via Diffs and Summaries to save VRAM. "
-                "Always save findings to the DB via 'update_kg'."
-            )
-        }
-
-    def _denoise(self, text):
-        """Removes common syscall noise to save tokens."""
-        noise_filters = ["gettimeofday", "brk", "mmap", "ARCH_SET_FS", "set_tid_address"]
-        lines = text.splitlines()
-        filtered = [l for l in lines if not any(f in l for f in noise_filters)]
-        return "\n".join(filtered[:60]) # Cap at 60 lines
-
-    def _get_diff(self, key, current_output):
-        """Only sends the delta if a command is repeated."""
-        if key in self.r2_cache:
-            old = self.r2_cache[key]
-            if old == current_output: return "[Output Unchanged]"
-            diff = difflib.unified_diff(old.splitlines(), current_output.splitlines(), n=1)
-            self.r2_cache[key] = current_output
-            return "DIFF FROM PREVIOUS:\n" + "\n".join(list(diff)[:20])
-        
-        self.r2_cache[key] = current_output
-        return current_output
+                "1. Use 'perform_security_audit' first to map the binary. "
+                "2. Use 'run_trace' with ltrace/strace to watch real-time execution. "
+                "3. ALWAYS save critical findings to the DB via 'update_kg'. "
+                "4. Access history with 'query_kg'. Be concise and technical."
+            )},
+            {"role": "user", "content": "Wait for further instructions."}
+        ]
 
     def _count(self, content):
         if not content: return 0
@@ -114,7 +97,7 @@ class SecurityContextManager:
 
     def add(self, role, content=None, tool_calls=None, tool_call_id=None, name=None):
         msg = {"role": role}
-        if content: msg["content"] = content
+        if content is not None: msg["content"] = content
         if tool_calls: msg["tool_calls"] = tool_calls
         if tool_call_id: 
             msg["tool_call_id"] = tool_call_id
@@ -132,33 +115,21 @@ class SecurityContextManager:
             total -= removed["tokens"]
 
     def get_messages(self):
-        return [self.system_prompt] + [m["msg"] for m in self.history]
+        return self.system_prompt + [m["msg"] for m in self.history]
 
 
 class SecurityAgent:
     def __init__(self):
         self.db = SQLiteMemory(DB_PATH)
         self.ctx = SecurityContextManager(MAX_CONTEXT_TOKENS)
-        self.r2_cache = {} # For Diffing
-        self.history = [
-            {"role": "system", "content": (
-                "You are an expert Linux Security Researcher. "
-                "1. Use 'perform_security_audit' first to map the binary. "
-                "2. Use 'run_trace' with ltrace/strace to watch real-time execution. "
-                "3. ALWAYS save critical findings to the DB via 'update_kg'. "
-                "4. Access history with 'query_kg'. Be concise and technical."
-            )},
-            {"role": "user", "content": "Wait for further instructions."}
-        ]
+
         response = client.chat.completions.create(
             model="Qwen3",
-            messages=self.history,
+            messages=self.ctx.system_prompt,
             tools=self.get_tool_schemas(),
             tool_choice="auto"
         )
         print(response, file=sys.stderr)
-        # Volatile storage for raw data that shouldn't clog long-term memory
-        self.last_raw_output = None 
 
     def summarize_content(self, raw_text):
         """Internal call to the LLM to condense massive tool output."""
@@ -172,13 +143,6 @@ class SecurityAgent:
         except:
             print("[!] Output too large. Truncating...", file=sys.stderr)
             return f"[TRUNCATED DATA]: {raw_text[:1000]}"
-
-    def prune_history(self):
-        """Keep the conversation history within a manageable size."""
-        if len(self.history) > MAX_HISTORY_MESSAGES:
-            # Preserve the system prompt (index 0) and the last N messages
-            print("[!] Pruning history to save context tokens.")
-            self.history = [self.history[0]] + self.history[-(MAX_HISTORY_MESSAGES-1):]
 
     def run_trace(self, filename, tool="ltrace", args=""):
         """Hardware-lite dynamic analysis using ltrace or strace."""
@@ -215,8 +179,6 @@ class SecurityAgent:
             result = self.db.query(args.get("binary"), args.get("node"))
         else: 
             result = "Unknown tool."
-        # Smart Memory Logic: Volatility and Summarization
-        self.last_raw_output = result # Store in volatile memory for exactly one turn
         
         if len(result) > MAX_TOOL_CHARS:
             return self.summarize_content(result)
@@ -295,31 +257,24 @@ class SecurityAgent:
             return f"Fuzzing failed: {str(e)}"
 
     def chat(self, user_input):
-        # Handle a special keyword to access volatile memory
-        if "show raw" in user_input.lower() and self.last_raw_output:
-            user_input += f"\n\n[RAW CONTEXT]: {self.last_raw_output}"
-
         self.ctx.add("user", user_input)
-        self.history.append({"role": "user", "content": user_input})
-
         logger.log_message("user", user_input)
         
         while True:
             response = client.chat.completions.create(
                 model="Qwen3",
-                messages=self.ctx.get_messages(), #self.history,
+                messages=self.ctx.get_messages(),
                 tools=self.get_tool_schemas(),
                 tool_choice="auto"
             )
 
             msg = response.choices[0].message
             self.ctx.add("assistant", content=msg.content, tool_calls=msg.tool_calls)
-            self.history.append(msg)
-
             logger.log_message(msg.role, msg.content)
 
             if not msg.tool_calls:
-                self.prune_history() # Clean up before next turn
+                logger.log_message(msg.role, msg.content)
+                print(f"[*] Returning from Chat -> Role: {msg.role} Content: {msg.content}", file=sys.stderr)
                 return msg.content
             
             for tool_call in msg.tool_calls:
