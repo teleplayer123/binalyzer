@@ -79,14 +79,15 @@ class SecurityContextManager:
         self.encoder = tiktoken.get_encoding("cl100k_base")
         self.max_tokens = max_tokens
         self.history = deque()
-        self.system_prompt = {
+        self.system_prompt = [{
             "role": "system",
             "content": (
                 "You are an expert Linux Security Researcher. "
                 "Context is managed via Diffs and Summaries to save VRAM. "
                 "Always save findings to the DB via 'update_kg'."
-            )
-        }
+            )},
+            {"role": "user", "content": "Wait for further instructions"}
+        ]
 
     def _count(self, content):
         if not content: return 0
