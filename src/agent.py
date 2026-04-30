@@ -387,7 +387,7 @@ class SecurityAgent:
                            "length": {"type": "integer", "description": "Length of the fuzzing pattern to generate."},
                            "filename": {"type": "string", "description": "Name of the file that the generated pattern is written to."}
                         },
-                        "required": ["length"]
+                        "required": ["length", "filename"]
                     }
                 }
             },
