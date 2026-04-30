@@ -21,3 +21,6 @@ class ChatLogger:
     
     def log_summary(self, summary):
         self.logger.info(f"SUMMARY: {summary}")
+
+    def log_info(self, msg):
+        self.logger.info(msg)

@@ -267,10 +267,13 @@ class SecurityAgent:
                 tools=self.get_tool_schemas(),
                 tool_choice="auto"
             )
+            logger.log_info(f"Response: {response}")
 
             msg = response.choices[0].message
+            logger.log_info(f"Message: {msg}")
+
             self.ctx.add("assistant", content=msg.content, tool_calls=msg.tool_calls)
-            logger.log_message(msg.role, msg.content)
+            logger.log_message(msg.role, f"Content: {msg.content}, ToolCall: {msg.tool_calls}")
 
             if not msg.tool_calls:
                 logger.log_message(msg.role, msg.content)
