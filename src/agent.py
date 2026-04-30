@@ -168,7 +168,7 @@ class SecurityAgent:
         elif name == "perform_security_audit":
             result = self.run_audit(args.get("filename"))
         elif name == "generate_fuzz_seed":
-            result = self.generate_fuzz_seed(args.get("length"), args.get("filename"))
+            result = self.generate_fuzz_seed(args.get("length"), args.get("filename", SEED_FILE))
         elif name == "start_afl_fuzz":
             result = self.start_afl_fuzz(args.get("filename"), args.get("timeout", "60s"))
         elif name == "run_trace":
