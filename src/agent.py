@@ -400,5 +400,8 @@ if __name__ == "__main__":
         query = input("\n[User]: ")
         if len(query) == 0:
             continue
-        if query.lower() in ['exit', 'quit']: break
-        print(f"\n[Agent]: {agent.chat(query)}", file=sys.stderr)
+        if query.lower() in ['exit', 'quit']: 
+            break
+        res = agent.chat(query)
+        if len(res) > 0:
+            print(f"\n[Agent]: {res}", file=sys.stderr)
