@@ -277,7 +277,6 @@ class SecurityAgent:
 
             if not msg.tool_calls:
                 logger.log_message(msg.role, msg.content)
-                print(f"[*] Returning from Chat -> Role: {msg.role} Content: {msg.content}", file=sys.stderr)
                 return msg.content
             
             for tool_call in msg.tool_calls:
