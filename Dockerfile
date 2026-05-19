@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y \
     clang \
     llvm \
     git \
-    git-lfs \
     libtool \
     libtool-bin \
     automake \
@@ -40,7 +39,6 @@ RUN pip3 install --no-cache-dir \
     pyelftools \
     numpy \
     scipy \
-    hf_xet \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
@@ -56,10 +54,12 @@ RUN echo export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 >> /home/analyst/.bashrc
 
 # Setup directories
 RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs /home/analyst/fuzz_in /home/analyst/fuzz_out
-# Install git lfs
-RUN git lfs install
 
-#clone gemma model for inspection
-RUN git clone https://huggingface.co/google/gemma-4-31B-it-assistant
+RUN git clone https://github.com/ggml-org/llama.cpp.git
+RUN pip3 install --no-cache-dir -r llama.cpp/requirements/requirements-all.txt --break-system-packages
+RUN pip3 install --upgrade transformers --break-system-packages
+
+RUN wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+
 
 CMD ["bash"]
