@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     clang \
     llvm \
     git \
+    git-lfs \
     libtool \
     libtool-bin \
     automake \
@@ -39,6 +40,7 @@ RUN pip3 install --no-cache-dir \
     pyelftools \
     numpy \
     scipy \
+    hf_xet \
     r2pipe --break-system-packages
 
 RUN useradd -m analyst
@@ -54,7 +56,10 @@ RUN echo export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 >> /home/analyst/.bashrc
 
 # Setup directories
 RUN mkdir -p /home/analyst/target /home/analyst/db /home/analyst/logs /home/analyst/fuzz_in /home/analyst/fuzz_out
-# Copy xz binary for testing
-RUN cp $(which xz) /home/analyst/target/xz.bin
+# Install git lfs
+RUN git lfs install
+
+#clone gemma model for inspection
+RUN git clone https://huggingface.co/google/gemma-4-31B-it-assistant
 
 CMD ["bash"]
