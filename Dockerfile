@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y \
     libtool-bin \
     automake \
     bison \
+    cmake \
+    make \
     libglib2.0-dev \
     radare2 \
     nano \
